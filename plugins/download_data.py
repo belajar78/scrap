@@ -96,7 +96,18 @@ async def getThumb(url):
 async def downloads(message, url, session, name_file, text_progress):
     nama_folder = 'videos'
     try:
-        response = session.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "TE": "Trailers",
+            "Referer": url.split('/download')[0],
+            "Origin": url.split('/download')[0],
+            "Cache-Control": "no-cache"
+        }
+        response = session.get(url, headers=headers)
         soup = BeautifulSoup(response.text, "html.parser")
 
         link = soup.find('a', {"class": "btn btn-primary d-flex align-items-center justify-content-between"})
