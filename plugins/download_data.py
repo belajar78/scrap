@@ -110,6 +110,14 @@ async def downloads(message, url, session, name_file, text_progress):
         response = session.get(url, headers=headers)
         soup = BeautifulSoup(response.text, "html.parser")
 
+        recaptcha_div = soup.find('div', {"class": "g-recaptcha"})
+        if not recaptcha_div:
+            return False, "reCAPTCHA not found. Please check the page structure."
+
+        # Step 3: Solve reCAPTCHA
+        recaptcha_sitekey = recaptcha_div.get('data-sitekey')
+        # recaptcha_response = await solve_recaptcha(recaptcha_sitekey)  # Implement your reCAPTCHA solving logic here
+        print(recaptcha_sitekey)
         link = soup.find('a', {"class": "btn btn-primary d-flex align-items-center justify-content-between"})
         
         if (not link):
