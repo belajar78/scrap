@@ -1,29 +1,24 @@
 import requests
-import shutil
+import shutil, re
+import httpx
 import time, math, os
 
 from bs4 import BeautifulSoup
 
 async def getDetailsDoodStreamDownload(url):
     try:
-        session = requests.Session()
         url = url.replace('/e/', '/d/')
         baseURL = url.split("/d/")[0]
 
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        }
+
+        response = requests.get(url, headers=headers)
 
         soup = BeautifulSoup(response.text, "html.parser")
         
-        urlThumb = soup.find("iframe")
-        if (urlThumb):
-            urlThumbCek = urlThumb.get("src").startswith("https://") or urlThumb.get("src").startswith("http://")
-            urlThumb = urlThumb.get("src")
-            urlThumb = urlThumb if urlThumbCek else baseURL + urlThumb
-            urlThumb = await getThumb(urlThumb)
-
-        
         info = soup.find("div", {"class": "info"})
-        
         if not info:
             return False, "Video Tidak Ditemukan"
 
@@ -31,46 +26,107 @@ async def getDetailsDoodStreamDownload(url):
         if name:
             name = name.text.strip()
 
-        duration = info.find("div", class_="length")
+        duration = info.find("div", {"class": "length"})
         if duration:
             duration = duration.text.strip()
 
-        size = info.find("div", class_="size")
+        size = info.find("div", {"class": "size"})
         if size:
             size = size.text.strip()
 
-        date = info.find("div", class_="uploadate")
+        date = info.find("div", {"class": "uploadate"})
         if date:
             date = date.text.strip()
 
-        downloadLink = soup.find("div", {"class": "download-content"})
-        if not downloadLink:
-            return False, "Button download tidak ditemukan."
+        # downloadLink = soup.find("div", {"class": "download-content"})
+        # if not downloadLink:
+        #     return False, "Button download tidak ditemukan."
 
-        downloadLink = downloadLink.find("a")
-        if not downloadLink:
-            return False, "URL tersebut tidak mengizinkan untuk didownload"
-        downloadLink = downloadLink.get("href")
+        # downloadLink = downloadLink.find("a")
+        # if not downloadLink:
+        #     return False, "URL tersebut tidak mengizinkan untuk didownload"
+        # downloadLink = downloadLink.get("href")
 
         # downloads(url.split("/d/")[0] + downloadLink, session)
+        urlLink = soup.find("iframe")
+        if (urlLink):
+            urlLinkCek = urlLink.get("src").startswith("https://") or urlLink.get("src").startswith("http://")
+            urlLink = urlLink.get("src")
+            urlLink = urlLink if urlLinkCek else baseURL + urlLink
+            
+
         data = {
             "name": name,
             "duration": duration,
             "size": size,
             "date": date,
-            "thumb": urlThumb,
-            "url": baseURL + downloadLink,
-            "session": session
+            "url": urlLink,
+            # "session": session
         }
 
         return True, data
     except Exception as e:
         print(e)
         return False, "Terjadi kesalahan atau URL tidak valid!"
+    
+async def downloadVideosDoodStream(url, message, name_file, text_progress):
+    nama_folder = 'videos'
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        }
+        responses = requests.get(url, headers=headers)
+        soup = BeautifulSoup(responses.text, "html.parser")
+
+        recaptcha_div = soup.find('div', {"class": "g-recaptcha"})
+        if recaptcha_div:
+            return False, "Captcha terdeteksi."      
+
+        pass_md5 = re.search(r"/pass_md5/[^']*", responses.text)
+        if not pass_md5:
+            return False, "Video Tidak Ditemukan, coba kembali."
+        
+        pass_md5 = pass_md5.group()
+        url = url.split('/e/')[0]
+        urlh = f"{url}{pass_md5}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0",
+            "referer": url,
+        }
+        res = requests.get(urlh, headers=headers)
+
+        md5 = pass_md5.split("/")
+        true_url = res.text + "MovCli3oPi?token=" + md5[-1]
+
+        response = requests.get(true_url, headers=headers, stream=True)
+        if response.status_code == 200:
+            total_size = int(response.headers.get('content-length', 0))
+            chunk_size = 1024
+
+            start_time = time.time()
+            a = 0
+            if not os.path.exists(nama_folder):
+                os.mkdir(nama_folder)
+            name_file = f"{nama_folder}/{name_file}"
+            with open(name_file, 'wb') as file:
+                for data in response.iter_content(chunk_size=chunk_size):
+                    file.write(data)
+                    await progress_for_pyrogram(a+len(data), total_size, text_progress, message, start_time)
+                    a += len(data)
+            
+            data = {
+                "url": true_url,
+                "namefile": name_file
+            }
+            return True, data
+        else:
+            return False, f"Error {response.status_code}: Gagal mengunduh video."
+    except Exception as e:
+        print(e)
+        return False, "Terjadi kesalahan!"
 
 async def getThumb(url):
     try:
-
         response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -88,7 +144,6 @@ async def getThumb(url):
             for data in response.iter_content(chunk_size=1024):
                 file.write(data)
             # shutil.copyfileobj(response.raw, file)
-
         return urlThumb
     except Exception as e:
         return None
@@ -111,13 +166,10 @@ async def downloads(message, url, session, name_file, text_progress):
         soup = BeautifulSoup(response.text, "html.parser")
 
         recaptcha_div = soup.find('div', {"class": "g-recaptcha"})
-        if not recaptcha_div:
-            return False, "reCAPTCHA not found. Please check the page structure."
+        if recaptcha_div:
+            return False, "Captcha terdeteksi, coba kembali."                    
 
-        # Step 3: Solve reCAPTCHA
-        recaptcha_sitekey = recaptcha_div.get('data-sitekey')
-        # recaptcha_response = await solve_recaptcha(recaptcha_sitekey)  # Implement your reCAPTCHA solving logic here
-        print(recaptcha_sitekey)
+
         link = soup.find('a', {"class": "btn btn-primary d-flex align-items-center justify-content-between"})
         
         if (not link):
@@ -190,7 +242,7 @@ async def progress_for_pyrogram(
             )
         except:
             pass
-
+    
 
 def humanbytes(size):
     # https://stackoverflow.com/a/49361727/4723940

@@ -6,7 +6,7 @@ from plugins import (
     getFolderDoodStream, 
     getFolderPoopHD, 
     getDetailsDoodStreamDownload, 
-    downloads, 
+    downloadVideosDoodStream, 
     progress_for_pyrogram, 
     convert_to_seconds,
     subschannel,
@@ -107,15 +107,13 @@ async def video_msg(bot: Client, msg: types.Message):
         message = await start_message.edit(msg_notifikasi)
         
         msg_notifikasi_1 = msg_notifikasi + "\n<b>👉 Sedang mendownload</b>"
-        vid = await downloads(message, data[1]['url'], data[1]['session'], f"{data[1]['name']}_{msg.from_user.id}_{msg.id}.mp4", msg_notifikasi_1)
-
-        if (not vid[0]):
-            if (data[1]['thumb']):
-                if os.path.exists(data[1]['thumb']):
-                    os.remove(data[1]['thumb'])
-            await msg.reply(vid[1])
+        if (not data[1]['url']):
+            await message.edit(msg_notifikasi + "\n<b>URL tidak ditemukan</b>")
             return
-        
+        vid = await downloadVideosDoodStream(data[1]['url'], message, f"{data[1]['name']}_{msg.from_user.id}_{msg.id}.mp4", msg_notifikasi_1)
+        if (not vid[0]):
+            await message.edit(msg_notifikasi + f"\n{vid[1]}")
+            return
         msg_notifikasi_2 = msg_notifikasi + "\n<b>👉 Sedang diupload</b>"
 
         duration = await convert_to_seconds(data[1]['duration'])
@@ -126,8 +124,6 @@ async def video_msg(bot: Client, msg: types.Message):
 
         if os.path.exists(vid[1]['namefile']):
             os.remove(vid[1]['namefile'])
-        if os.path.exists(data[1]['thumb']):
-            os.remove(data[1]['thumb'])
 
         last_msg = "<b>✅ Video Telah Diupload ✅</b>"
         await start_message.edit(msg_notifikasi_2.replace("<b>👉 Sedang diupload</b>", last_msg))
